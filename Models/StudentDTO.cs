@@ -11,9 +11,10 @@ namespace CollegeApp.Models
         [MaxLength(50)]
         public string? Name { get; set; }
         [EmailAddress]
+        [MaxLength(50)]
         public string? Email { get; set; }
         [Required]
-        [MaxLength(100)]
+        [MaxLength(200)]
         public string? Address { get; set; }
 
         public DateTime? AdmissionDate { get; set; }

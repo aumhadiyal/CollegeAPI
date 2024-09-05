@@ -1,5 +1,6 @@
 using CollegeApp.Controllers;
 using CollegeApp.Data;
+using CollegeApp.Properties.Configurations;
 using Microsoft.EntityFrameworkCore;
 using Serilog;
 var builder = WebApplication.CreateBuilder(args);
@@ -15,6 +16,7 @@ builder.Services.AddControllers().AddNewtonsoftJson();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 builder.Services.AddDbContext<CollegeDBContext>(options => options.UseSqlServer(builder.Configuration.GetConnectionString("Default")));
+builder.Services.AddAutoMapper(typeof(AutoMapperConfig));
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.

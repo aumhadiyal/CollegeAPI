@@ -5,13 +5,8 @@ using Newtonsoft.Json;
 
 namespace CollegeApp.Data
 {
-    public class CollegeDBContext : DbContext
+    public class CollegeDBContext(DbContextOptions options) : DbContext(options)
     {
-        public CollegeDBContext(DbContextOptions options) : base(options)
-        {
-            
-        }
-
         public DbSet<Student> Students { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)

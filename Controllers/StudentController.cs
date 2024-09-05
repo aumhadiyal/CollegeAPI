@@ -1,257 +1,148 @@
-﻿using CollegeApp.Data;
+﻿using AutoMapper;
+using CollegeApp.Data;
 using CollegeApp.Models;
 using Microsoft.AspNetCore.JsonPatch;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
 namespace CollegeApp.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    public class StudentController(CollegeDBContext dbContext, ILogger<StudentController> logger) : Controller
+    public class StudentController(CollegeDBContext dbContext, ILogger<StudentController> logger,IMapper mapper) : Controller
     {
-
-
         private readonly ILogger<StudentController> _logger = logger;
         private readonly CollegeDBContext _dbContext = dbContext;
-
-
+        private readonly IMapper _mapper = mapper;
 
         // POST: api/Student/Create
-        // Adds a new student to the repository.
-        // Returns 201 Created if successful, 400 Bad Request if validation fails, or 500 Internal Server Error for other errors.
         [HttpPost("Create", Name = "CreateStudent")]
         [ProducesResponseType(StatusCodes.Status201Created)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
-        public ActionResult<StudentDTO> AddStudent([FromBody] StudentDTO? newstudent)
+        public async Task<ActionResult<StudentDTO>> AddStudent([FromBody] StudentDTO? newStudentDTO)
         {
-            // Check if the provided model is valid
-            if (!ModelState.IsValid)
-            {
-                return BadRequest();
-            }
+            if (!ModelState.IsValid) return BadRequest();
 
-            // Validate the Admission Date (should not be in the past)
-            if (newstudent.AdmissionDate < DateTime.Now)
+            if (newStudentDTO.AdmissionDate < DateTime.Now)
             {
                 ModelState.AddModelError("Invalid Admission Date", "Admission date is of past");
                 return BadRequest(ModelState);
             }
-            var id = new Guid();
-            var std = new Student()
-            {
-                Id = id,
-                Address = newstudent.Address,
-                Email = newstudent.Email,
-                AdmissionDate = newstudent.AdmissionDate,
-                Name = newstudent.Name
-            };
 
-            _dbContext.Students.Add(std);
-            _dbContext.SaveChanges();
 
-            // Return the created student information with a 201 status
-            return CreatedAtRoute("GetStudentById", new { id = std.Id }, std);
+            var newStudent = _mapper.Map<Student>(newStudentDTO);
+
+            await _dbContext.Students.AddAsync(newStudent);
+            await _dbContext.SaveChangesAsync();
+
+            return CreatedAtRoute("GetStudentById", new { id = newStudent.Id }, newStudent);
         }
 
         // PUT: api/Student/Update
-        // Updates an existing student's information in the repository.
-        // Returns 204 No Content if successful, 400 Bad Request if validation fails, or 500 Internal Server Error for other errors.
-        [HttpPut("Update", Name = "UpdateStudent")]
+        [HttpPut("Update/{id:int}", Name = "UpdateStudent")]
         [ProducesResponseType(StatusCodes.Status204NoContent)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
-        public ActionResult<StudentDTO> UpdateStudent([FromBody] Student existingstudent)
+        public async Task<ActionResult<StudentDTO>> UpdateStudent([FromRoute] int id,[FromBody] StudentDTO existingStudent)
         {
-            // Check if the provided model is valid
-            if (!ModelState.IsValid)
-            {
-                return BadRequest();
-            }
+            if (!ModelState.IsValid) return BadRequest();
 
-            // Find the student by ID in the repository
-            var std = _dbContext.Students.FirstOrDefault(x => x.Id == existingstudent.Id);
-            if (std is null)
-            {
-                return NotFound();
-            }
+            var foundStudent = await _dbContext.Students.FirstOrDefaultAsync(x => x.Id == id);
+            if (foundStudent is null) return NotFound();
 
-            // Update student details
-            std.Name = existingstudent.Name;
-            std.Email = existingstudent.Email;
-            std.Address = existingstudent.Address;
-            std.AdmissionDate = existingstudent.AdmissionDate;
+            _mapper.Map(existingStudent, foundStudent);
 
-            // Return no content to indicate success
+            _dbContext.Update(foundStudent);  // Explicitly updating
+            await _dbContext.SaveChangesAsync();
+
             return NoContent();
         }
 
-
         // PATCH: api/Student/UpdatePartial/{id}
-        // Partially updates an existing student's information in the repository.
-        // Returns 204 No Content if successful, 400 Bad Request if validation fails, or 500 Internal Server Error for other errors.
         [HttpPatch("UpdatePartial/{id:int}", Name = "UpdateStudentPartial")]
         [ProducesResponseType(StatusCodes.Status204NoContent)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
-        public ActionResult UpdateStudentPartial([FromRoute] int id, [FromBody] JsonPatchDocument<StudentDTO> patchDocument)
+        public async Task<ActionResult> UpdateStudentPartial([FromRoute] int id, [FromBody] JsonPatchDocument<StudentDTO> patchDocument)
         {
-            // Check if the provided model is valid
-            if (!ModelState.IsValid)
-            {
-                return BadRequest();
-            }
+            if (!ModelState.IsValid) return BadRequest();
 
-            // Validate the student ID (should be positive)
-            if (id < 0)
-            {
-                return BadRequest();
-            }
+            if (id < 0) return BadRequest();
 
-            // Find the student by ID in the repository
-            var std = _dbContext.Students.FirstOrDefault(x => x.Id.Equals(id));
-            if (std is null)
-            {
-                return NotFound();
-            }
+            var foundStudent = await _dbContext.Students.FirstOrDefaultAsync(x => x.Id.Equals(id));
+            if (foundStudent is null) return NotFound();
 
-            // Map the existing student entity to a DTO
-            var updatedStudent = new StudentDTO()
-            {
-                Name = std.Name,
-                Email = std.Email,
-                Address = std.Address,
-                AdmissionDate = std.AdmissionDate,
-            };
+            var updatedStudent = _mapper.Map<StudentDTO>(foundStudent);
 
-            // Apply the JSON Patch document to the DTO
             patchDocument.ApplyTo(updatedStudent, ModelState);
 
-            // Check if the patch operation was successful
-            if (!ModelState.IsValid)
-            {
-                return BadRequest(ModelState);
-            }
+            if (!ModelState.IsValid) return BadRequest(ModelState);
 
-            // Update the student entity with the patched values
-            std.Name = updatedStudent.Name;
-            std.Email = updatedStudent.Email;
-            std.Address = updatedStudent.Address;
-            std.AdmissionDate = updatedStudent.AdmissionDate;
+            _mapper.Map(updatedStudent, foundStudent);
 
-            // Return no content to indicate success
+            _dbContext.Update(foundStudent);
+            await _dbContext.SaveChangesAsync();
+
             return NoContent();
         }
 
-
-
         // GET: api/Student/All
-        // Retrieves all students from the repository.
-        // Returns 200 OK with the list of students, or 500 Internal Server Error for other errors.
         [HttpGet("All", Name = "GetAllStudents")]
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
-        public ActionResult<IEnumerable<StudentDTO>> GetStudents()
+        public async Task<ActionResult<IEnumerable<StudentDTO>>> GetStudents()
         {
-            _logger.LogInformation("Gell All Students Triggered");
-            // Map the list of students to StudentDTO objects
-            var students = _dbContext.Students.ToList();
-
-            // Return the list of students
-            return Ok(students);
+            _logger.LogInformation("Get All Students Triggered");
+            var students = await _dbContext.Students.AsNoTracking().ToListAsync(); // Read-only query
+            var studentsDTO = _mapper.Map <List<StudentDTO>>(students);
+            return Ok(studentsDTO);
         }
 
         // GET: api/Student/{id}
-        // Retrieves a student by their ID.
-        // Returns 200 OK if found, 400 Bad Request if the ID is invalid, or 404 Not Found if the student doesn't exist.
         [HttpGet("{id:int}", Name = "GetStudentById")]
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
-        public ActionResult<StudentDTO?> GetStudentById([FromRoute] int id)
+        public async Task<ActionResult<StudentDTO?>> GetStudentById([FromRoute] int id)
         {
-            // Validate the student ID (should be positive)
-            if (id < 0)
-            {
-                _logger.LogWarning("Bad Request Error");
-                return BadRequest();
-            }
+            if (id < 0) return BadRequest();
 
-            // Find the student by ID in the repository
-            var std = _dbContext.Students.FirstOrDefault(x => x.Id.Equals(id));
-            if (std is null)
-            {
-                _logger.LogError("Not Found Error");
-                return NotFound();
-            }
+            var foundStudent = await _dbContext.Students.AsNoTracking().FirstOrDefaultAsync(x => x.Id.Equals(id)); // Read-only query
+            if (foundStudent is null) return NotFound();
 
-            // Map the student to a StudentDTO object
-            var stdd = new StudentDTO
-            {
-                Name = std.Name,
-                Email = std.Email,
-                Address = std.Address,
-                AdmissionDate = std.AdmissionDate,
-            };
-
-            // Return the student details
-            return Ok(stdd);
+            var foundStudentDTO = _mapper.Map<StudentDTO>(foundStudent);
+            return Ok(foundStudentDTO);
         }
 
         // GET: api/Student/{name}
-        // Retrieves a student by their name.
-        // Returns 200 OK if found, or 404 Not Found if the student doesn't exist.
         [HttpGet("{name}", Name = "GetStudentByName")]
-        public ActionResult<StudentDTO?> GetStudentbyName([FromRoute] string name)
+        public async Task<ActionResult<StudentDTO?>> GetStudentbyName([FromRoute] string name)
         {
-            // Find the student by name in the repository
-            var std = _dbContext.Students.FirstOrDefault(x => x.Name == name);
-            if (std is null)
-            {
-                return NotFound();
-            }
+            var foundStudent = await _dbContext.Students.AsNoTracking().FirstOrDefaultAsync(x => x.Name == name); // Read-only query
+            if (foundStudent is null) return NotFound();
 
-            // Map the student to a StudentDTO object
-            var stdd = new StudentDTO
-            {
-                Name = std.Name,
-                Email = std.Email,
-                Address = std.Address,
-                AdmissionDate = std.AdmissionDate,
-            };
-
-            // Return the student details
-            return Ok(stdd);
+            var foundStudentDTO = _mapper.Map<StudentDTO>(foundStudent);  
+            return Ok(foundStudentDTO);
         }
 
         // DELETE: api/Student/{id}
-        // Deletes a student by their ID.
-        // Returns 200 OK if successful, 400 Bad Request if the ID is invalid, or 404 Not Found if the student doesn't exist.
         [HttpDelete("{id:int}", Name = "DeleteStudentById")]
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
-        public IActionResult DeleteStudent(int id)
+        public async Task<IActionResult> DeleteStudent(int id)
         {
-            // Validate the student ID (should be positive)
-            if (id < 0)
-            {
-                return BadRequest();
-            }
+            if (id < 0) return BadRequest();
 
-            // Find the student by ID in the repository
-            var std = _dbContext.Students.FirstOrDefault(x => x.Id.Equals(id));
-            if (std is null)
-            {
-                return NotFound();
-            }
+            var foundStudent = await _dbContext.Students.FirstOrDefaultAsync(x => x.Id.Equals(id));
+            if (foundStudent is null) return NotFound();
 
-            // Remove the student from the repository
-            _dbContext.Students.Remove(std);
+            _dbContext.Students.Remove(foundStudent);
+            await _dbContext.SaveChangesAsync(); // Save changes after deletion
 
-            // Return OK to indicate success
             return Ok(true);
         }
 
@@ -267,6 +158,5 @@ namespace CollegeApp.Controllers
             _logger.LogCritical("Critical Logged");
             return Ok();
         }
-
     }
 }
