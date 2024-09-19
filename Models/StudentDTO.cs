@@ -9,15 +9,15 @@ namespace CollegeApp.Models
                 [Required]*/
         [Required]
         [MaxLength(50)]
-        public string? Name { get; set; }
+        public string? NameDTO { get; set; }
         [EmailAddress]
         [MaxLength(50)]
-        public string? Email { get; set; }
+        public string? EmailDTO { get; set; }
         [Required]
         [MaxLength(200)]
-        public string? Address { get; set; }
+        public string? AddressDTO { get; set; }
 
-        public DateTime? AdmissionDate { get; set; }
+        public DateTime? AdmissionDateDTO { get; set; }
     }
 
 
